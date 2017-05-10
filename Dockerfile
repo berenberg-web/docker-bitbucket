@@ -18,7 +18,7 @@ ENV BITBUCKET_USER=bitbucket \
     BITBUCKET_GID=1591 \
     BITBUCKET_HOME=/var/atlassian/application-data/bitbucket \
     BITBUCKET_INSTALL_DIR=/opt/atlassian/bitbucket \
-    BITBUCKET_VERSION=4.14.4
+    BITBUCKET_VERSION=4.14.5
 
 # User settings  
 RUN addgroup \
