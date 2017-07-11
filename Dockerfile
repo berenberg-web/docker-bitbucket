@@ -1,15 +1,6 @@
-FROM openjdk:8u121-jdk
+FROM openjdk:8u131-alpine
 
-# Install git, ssh, sendmail
-RUN apt-get update -qq \
- && apt-get install -y --no-install-recommends \
-    git \
-    libtcnative-1 \
-    sendmail \
-    ssh \
- && apt-get clean autoclean \
- && apt-get autoremove --yes \
- && rm -rf /var/lib/{apt,dpkg,cache,log}/
+COPY docker/ /
 
 # Bitbucket envs    
 ENV BITBUCKET_USER=bitbucket \
@@ -18,57 +9,42 @@ ENV BITBUCKET_USER=bitbucket \
     BITBUCKET_GID=1591 \
     BITBUCKET_HOME=/var/atlassian/application-data/bitbucket \
     BITBUCKET_INSTALL_DIR=/opt/atlassian/bitbucket \
-    BITBUCKET_VERSION=4.14.5
+    BITBUCKET_VERSION=5.2.0
 
-# User settings  
-RUN addgroup \
-    --gid ${BITBUCKET_GID} \
-    ${BITBUCKET_GROUP} \
+# User settings 
+RUN mkdir -p ${BITBUCKET_HOME} \
+ && addgroup \
+    -g ${BITBUCKET_GID} \
+    -S ${BITBUCKET_GROUP} \
  && adduser \
-    --uid ${BITBUCKET_UID} \
-    --ingroup ${BITBUCKET_GROUP} \
-    --home ${BITBUCKET_HOME} \
-    --shell /bin/false \
-    --disabled-password \
-    -c "Bitbucket Account" \
-    --gecos "" \
-    ${BITBUCKET_USER} 
-
-# Install bitbucket + config
-RUN mkdir -p ${BITBUCKET_INSTALL_DIR} \
- && curl -L --silent https://downloads.atlassian.com/software/stash/downloads/atlassian-bitbucket-${BITBUCKET_VERSION}.tar.gz | tar -xz --strip=1 -C "$BITBUCKET_INSTALL_DIR" \
- && mkdir -p ${BITBUCKET_INSTALL_DIR}/conf/Catalina \
- && chmod -R 700 \
-    ${BITBUCKET_INSTALL_DIR}/conf/Catalina \
-    ${BITBUCKET_INSTALL_DIR}/logs \
-    ${BITBUCKET_INSTALL_DIR}/temp \
-    ${BITBUCKET_INSTALL_DIR}/work \
- && chown -R ${BITBUCKET_USER}:${BITBUCKET_GROUP} ${BITBUCKET_INSTALL_DIR}/ \
- && ln -s "/usr/lib/x86_64-linux-gnu/libtcnative-1.so" "${BITBUCKET_INSTALL_DIR}/lib/native/libtcnative-1.so" \
- && sed -i -e \
-    's@^export CATALINA_OPTS$@. $PRGDIR/catalina-connector-opts.sh\nexport CATALINA_OPTS@' \
-    ${BITBUCKET_INSTALL_DIR}/bin/setenv.sh \
- && sed -i -e \
-    's@$PRGDIR/catalina.sh@CATALINA_OPTS="$CATALINA_OPTS" $PRGDIR/catalina.sh@' \
-    -e 's@$PRGDIR/startup.sh@CATALINA_OPTS="$CATALINA_OPTS" $PRGDIR/startup.sh@' \
-    ${BITBUCKET_INSTALL_DIR}/bin/start-webapp.sh \
- && sed -i -e \
-    's/port="7990"/port="7990" secure="${catalinaConnectorSecure}" scheme="${catalinaConnectorScheme}" proxyName="${catalinaConnectorProxyName}" proxyPort="${catalinaConnectorProxyPort}"/' \
-    ${BITBUCKET_INSTALL_DIR}/conf/server.xml
-
-COPY catalina-connector-opts.sh ${BITBUCKET_INSTALL_DIR}/bin/
-
-# Custom start script
-COPY docker-entrypoint.sh /usr/local/bin/
-
-RUN chmod -R 755 /usr/local/bin/docker-entrypoint.sh
+    -u ${BITBUCKET_UID} \
+    -D -S \
+    -h ${BITBUCKET_HOME} \
+    -G ${BITBUCKET_GROUP} ${BITBUCKET_USER} \
+    # persistent deps
+ && apk add --no-cache --virtual .persistent-deps \
+    bash \
+    ca-certificates \
+    curl \
+    git \
+    mini-sendmail \
+    openssh \
+    openssl \
+    perl \
+    procps \
+    # install dumb-init https://github.com/Yelp/dumb-init
+ && curl -sL https://github.com/Yelp/dumb-init/releases/download/v1.2.0/dumb-init_1.2.0_amd64 -o /usr/local/bin/dumb-init \
+ && chmod +x /usr/local/bin/dumb-init \
+    # install Bitbucket
+ && mkdir -p ${BITBUCKET_INSTALL_DIR} \
+ && curl -sL https://downloads.atlassian.com/software/stash/downloads/atlassian-bitbucket-${BITBUCKET_VERSION}.tar.gz | tar -xz --strip-components=1 -C "${BITBUCKET_INSTALL_DIR}" \
+ && chown -R ${BITBUCKET_USER}:${BITBUCKET_GROUP} ${BITBUCKET_INSTALL_DIR}/
 
 # HTTP & SSH Port
 EXPOSE 7990 7999
 
-WORKDIR ${BITBUCKET_INSTALL_DIR}
+WORKDIR ${BITBUCKET_HOME}
  
-ENTRYPOINT [ "docker-entrypoint.sh" ]
+ENTRYPOINT [ "dumb-init" ]
 
-# Run in foreground
-CMD [ "sh", "-c", "su -s /bin/bash --preserve-environment -c '${BITBUCKET_INSTALL_DIR}/bin/start-bitbucket.sh -fg' ${BITBUCKET_USER}" ]
+CMD [ "docker-entrypoint", "-fg" ]
