@@ -9,7 +9,7 @@ ENV BITBUCKET_USER=bitbucket \
     BITBUCKET_GID=1591 \
     BITBUCKET_HOME=/var/atlassian/application-data/bitbucket \
     BITBUCKET_INSTALL_DIR=/opt/atlassian/bitbucket \
-    BITBUCKET_VERSION=5.2.0
+    BITBUCKET_VERSION=5.2.2
 
 # User settings 
 RUN mkdir -p ${BITBUCKET_HOME} \
@@ -27,7 +27,7 @@ RUN mkdir -p ${BITBUCKET_HOME} \
     ca-certificates \
     curl \
     git \
-    mini-sendmail \
+    #mini-sendmail \
     openssh \
     openssl \
     perl \
